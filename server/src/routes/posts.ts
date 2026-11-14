@@ -4,13 +4,26 @@ import { pool } from "../db/pool.js";
 export const postRouter = Router();
 
 postRouter.get("/", async (req, res) => {
-  const q = String(req.query.q ?? "");
-  const [rows] = await pool.query(
+  const raw = req.query.q;
+
+  if (raw !== undefined && typeof raw !== "string") {
+    return res.status(400).json({ message: "q must be a string" });
+  }
+
+  const q = raw ?? "";
+
+  if (q.length > 50) {
+    return res.status(400).json({ message: "q is too long" });
+  }
+
+  const [rows] = await pool.execute(
     `SELECT p.id, p.user_id, p.title, p.content, p.created_at, u.name AS authorName
      FROM posts p JOIN users u ON p.user_id=u.id
-     WHERE p.title LIKE '%${q}%'
-     ORDER BY p.id DESC`
+     WHERE p.title LIKE ?
+     ORDER BY p.id DESC`,
+    [`%${q}%`]
   );
+
   res.json(rows);
 });
 
