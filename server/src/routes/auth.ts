@@ -1,27 +1,47 @@
 import { Router } from "express";
 import crypto from "node:crypto";
+import type { RowDataPacket } from "mysql2";
 import { pool } from "../db/pool.js";
+
+import { boundedText } from "../validation.js";
+
+interface LoginRow extends RowDataPacket {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+}
 
 export const authRouter = Router();
 
 authRouter.post("/register", async (req, res) => {
-  const {email, password, name} = req.body;
+  const {email, password, name} = req.body ?? {};
+  if (typeof email !== "string" || typeof password !== "string") {
+    return res.status(400).json({ message: "email and password must be strings" });
+  }
+  if (!boundedText(name, 30)) {
+    return res.status(400).json({ message: "name must be a string of 1 to 30 characters" });
+  }
   const passwordHash = crypto.createHash("md5").update(password).digest("hex");
 
-  await pool.query(
-    `INSERT INTO users(email, password_hash, name, role) VALUES ('${email}', '${passwordHash}', '${name}', 'USER')`
+  await pool.execute(
+    "INSERT INTO users(email, password_hash, name, role) VALUES (?, ?, ?, 'USER')",
+    [email, passwordHash, name]
   );
 
   res.json({message: "registered"});
 });
 
 authRouter.post("/login", async (req, res) => {
-  const {email, password} = req.body;
+  const {email, password} = req.body ?? {};
+  if (typeof email !== "string" || typeof password !== "string") {
+    return res.status(400).json({ message: "email and password must be strings" });
+  }
   const passwordHash = crypto.createHash("md5").update(password).digest("hex");
 
-  const [rows]: any = await pool.query(
-    `SELECT id, email, name, role FROM users
-     WHERE email='${email}' AND password_hash='${passwordHash}'`
+  const [rows] = await pool.execute<LoginRow[]>(
+    "SELECT id, email, name, role FROM users WHERE email=? AND password_hash=?",
+    [email, passwordHash]
   );
 
   if (rows.length === 0) {

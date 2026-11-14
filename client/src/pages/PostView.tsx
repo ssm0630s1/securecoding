@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify";
 import { FormEvent, useEffect, useState } from "react";
 import { api, downloadUrl } from "../api";
 import { formatDate, formatSize } from "../format";
@@ -45,13 +46,20 @@ export default function PostView({id, me, go}: {id: number; me: User | null; go:
 
   const canEdit = me !== null && (me.id === post.user_id || me.role === "ADMIN");
 
+  const safeContent = DOMPurify.sanitize(post.content, {
+    ALLOWED_TAGS: ["b", "i", "u", "br"],
+    ALLOWED_ATTR: [],
+    ALLOW_ARIA_ATTR: false,
+    ALLOW_DATA_ATTR: false,
+  });
+
   return (
     <article className="card">
       <button className="back" onClick={() => go({name: "list"})}>← 목록으로</button>
       <h1>{post.title}</h1>
       <p className="meta">{post.authorName} · {formatDate(post.created_at)}</p>
 
-      <div className="content" dangerouslySetInnerHTML={{__html: post.content}} />
+      <div className="content" dangerouslySetInnerHTML={{__html: safeContent}} />
 
       {post.attachments.length > 0 && (
         <div className="files">
